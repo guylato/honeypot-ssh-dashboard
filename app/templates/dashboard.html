@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Honeypot Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            margin: 0;
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #cbd5e1;
+            margin-bottom: 25px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            background: #2563eb;
+            color: white;
+            padding: 12px 18px;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .button:hover {
+            background: #1d4ed8;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 14px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+
+        .stat {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .small {
+            color: #cbd5e1;
+            font-size: 14px;
+        }
+
+        .lists-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
+            margin-bottom: 30px;
+        }
+
+        ul {
+            padding-left: 18px;
+            margin: 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: #e2e8f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1e293b;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #334155;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .low {
+            background: #14532d;
+            color: #dcfce7;
+        }
+
+        .medium {
+            background: #78350f;
+            color: #fef3c7;
+        }
+
+        .high {
+            background: #7f1d1d;
+            color: #fee2e2;
+        }
+
+        .critical {
+            background: #4c0519;
+            color: #fbcfe8;
+        }
+
+        .attack-badge {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 10px;
+            background: #1d4ed8;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .commands {
+            white-space: pre-line;
+            color: #cbd5e1;
+        }
+
+        .muted {
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div>
+            <h1>Dashboard Honeypot SSH</h1>
+            <p class="subtitle">Analyse des tentatives capturées</p>
+        </div>
+        <div>
+            <a class="button" href="/report/txt" target="_blank">Télécharger le rapport TXT</a>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="card">
+            <h3>Sessions totales</h3>
+            <div class="stat">{{ total_sessions }}</div>
+        </div>
+
+        <div class="card">
+            <h3>Score moyen</h3>
+            <div class="stat">{{ average_score }}/100</div>
+        </div>
+
+        <div class="card">
+            <h3>Medium</h3>
+            <div class="stat">{{ medium_count }}</div>
+            <div class="small">30 à 59</div>
+        </div>
+
+        <div class="card">
+            <h3>High</h3>
+            <div class="stat">{{ high_count }}</div>
+            <div class="small">60 à 79</div>
+        </div>
+
+        <div class="card">
+            <h3>Critical</h3>
+            <div class="stat">{{ critical_count }}</div>
+            <div class="small">80 à 100</div>
+        </div>
+    </div>
+
+    <div class="lists-grid">
+        <div class="card">
+            <h3>Top IP</h3>
+            <ul>
+                {% if top_ips %}
+                    {% for ip, count in top_ips %}
+                        <li>{{ ip }} — {{ count }}</li>
+                    {% endfor %}
+                {% else %}
+                    <li class="muted">Aucune donnée</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Top usernames</h3>
+            <ul>
+                {% if top_usernames %}
+                    {% for username, count in top_usernames %}
+                        <li>{{ username }} — {{ count }}</li>
+                    {% endfor %}
+                {% else %}
+                    <li class="muted">Aucune donnée</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Top mots de passe</h3>
+            <ul>
+                {% if top_passwords %}
+                    {% for password, count in top_passwords %}
+                        <li>{{ password }} — {{ count }}</li>
+                    {% endfor %}
+                {% else %}
+                    <li class="muted">Aucune donnée</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Top commandes</h3>
+            <ul>
+                {% if top_commands %}
+                    {% for command, count in top_commands %}
+                        <li>{{ command }} — {{ count }}</li>
+                    {% endfor %}
+                {% else %}
+                    <li class="muted">Aucune donnée</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Types d'attaque</h3>
+            <ul>
+                {% if attack_types %}
+                    {% for attack_type, count in attack_types %}
+                        <li>{{ attack_type }} — {{ count }}</li>
+                    {% endfor %}
+                {% else %}
+                    <li class="muted">Aucune donnée</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Dernières sessions capturées</h3>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Date</th>
+                <th>IP</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th>Score</th>
+                <th>Niveau</th>
+                <th>Type</th>
+                <th>Commandes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td>{{ session.id }}</td>
+                <td>{{ session.timestamp }}</td>
+                <td>{{ session.ip_source }}</td>
+                <td>{{ session.username }}</td>
+                <td>{{ session.password }}</td>
+                <td>{{ session.threat_score }}/100</td>
+                <td>
+                    <span class="badge {{ session.threat_label }}">
+                        {{ session.threat_label }}
+                    </span>
+                </td>
+                <td>
+                    <span class="attack-badge">{{ session.attack_type }}</span>
+                </td>
+                <td class="commands">
+                    {% if session.commands %}
+                        {% for cmd in session.commands %}
+{{ cmd }}
+                        {% endfor %}
+                    {% else %}
+Aucune
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
