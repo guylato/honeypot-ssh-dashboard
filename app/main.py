@@ -5,6 +5,10 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from fastapi import Form
+from sqlalchemy import or_
+from app.models import WebEvent
+from app.services.scoring import compute_web_score, classify_web_attack, sanitize_password, score_to_label
 
 from app.database import Base, SessionLocal, engine
 from app.models import CommandLog, SessionAttack
@@ -332,3 +336,142 @@ def report_txt(db: Session = Depends(get_db)):
     ])
 
     return "\n".join(report_lines)
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+@app.get("/login", response_class=HTMLResponse)
+def fake_login_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="fake_login.html",
+        context={"request": request}
+    )
+
+
+@app.post("/login", response_class=HTMLResponse)
+def fake_login_submit(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("user-agent", "")
+    cleaned_password = sanitize_password(password)
+
+    score = compute_web_score(
+        path="/login",
+        username=username,
+        password=cleaned_password,
+        payload=f"username={username}&password={cleaned_password}",
+        user_agent=user_agent
+    )
+
+    attack_type = classify_web_attack(
+        path="/login",
+        payload=f"username={username}&password={cleaned_password}",
+        user_agent=user_agent,
+        username=username,
+        password=cleaned_password
+    )
+
+    event = WebEvent(
+        ip_source=ip,
+        method="POST",
+        path="/login",
+        user_agent=user_agent,
+        username=username,
+        password=cleaned_password,
+        payload=f"username={username}&password={cleaned_password}",
+        threat_score=score,
+        threat_label=score_to_label(score),
+        attack_type=attack_type
+    )
+
+    db.add(event)
+    db.commit()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="fake_login.html",
+        context={
+            "request": request,
+            "error": "Identifiants invalides"
+        }
+    )
+
+
+@app.get("/admin")
+def fake_admin(request: Request, db: Session = Depends(get_db)):
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("user-agent", "")
+
+    score = compute_web_score("/admin", None, None, None, user_agent)
+    attack_type = classify_web_attack("/admin", None, user_agent, None, None)
+
+    event = WebEvent(
+        ip_source=ip,
+        method="GET",
+        path="/admin",
+        user_agent=user_agent,
+        payload="",
+        threat_score=score,
+        threat_label=score_to_label(score),
+        attack_type=attack_type
+    )
+    db.add(event)
+    db.commit()
+
+    return {"message": "Access denied"}
+
+
+@app.get("/wp-admin")
+def fake_wp_admin(request: Request, db: Session = Depends(get_db)):
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("user-agent", "")
+
+    score = compute_web_score("/wp-admin", None, None, None, user_agent)
+    attack_type = classify_web_attack("/wp-admin", None, user_agent, None, None)
+
+    event = WebEvent(
+        ip_source=ip,
+        method="GET",
+        path="/wp-admin",
+        user_agent=user_agent,
+        payload="",
+        threat_score=score,
+        threat_label=score_to_label(score),
+        attack_type=attack_type
+    )
+    db.add(event)
+    db.commit()
+
+    return {"message": "Forbidden"}
+
+
+@app.get("/phpmyadmin")
+def fake_phpmyadmin(request: Request, db: Session = Depends(get_db)):
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("user-agent", "")
+
+    score = compute_web_score("/phpmyadmin", None, None, None, user_agent)
+    attack_type = classify_web_attack("/phpmyadmin", None, user_agent, None, None)
+
+    event = WebEvent(
+        ip_source=ip,
+        method="GET",
+        path="/phpmyadmin",
+        user_agent=user_agent,
+        payload="",
+        threat_score=score,
+        threat_label=score_to_label(score),
+        attack_type=attack_type
+    )
+    db.add(event)
+    db.commit()
+
+    return {"message": "Forbidden"}

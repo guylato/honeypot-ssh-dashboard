@@ -50,6 +50,30 @@ COMMON_BAD_PASSWORDS = [
     "ubuntu"
 ]
 
+WEB_SUSPICIOUS_KEYWORDS = [
+    "union select",
+    "' or 1=1",
+    "\" or 1=1",
+    "<script>",
+    "../",
+    "/etc/passwd",
+    "cmd=",
+    "powershell",
+    "wget",
+    "curl",
+    "phpmyadmin",
+    "wp-admin",
+    "select * from",
+    "drop table"
+]
+
+SENSITIVE_PATHS = [
+    "/admin",
+    "/login",
+    "/wp-admin",
+    "/phpmyadmin"
+]
+
 
 def sanitize_password(password: str | None) -> str | None:
     if password is None:
@@ -81,7 +105,6 @@ def compute_score(username: str | None, password: str | None, commands: list[str
 
     for cmd in commands:
         cmd_lower = cmd.lower()
-
         for suspicious in SUSPICIOUS_COMMANDS:
             if suspicious in cmd_lower:
                 suspicious_count += 1
@@ -113,7 +136,6 @@ def score_to_label(score: int) -> str:
 
 def classify_attack(username: str | None, password: str | None, commands: list[str]) -> str:
     cleaned_password = sanitize_password(password)
-    joined = " ".join(commands).lower()
 
     download_hits = sum(
         1 for cmd in commands
@@ -145,10 +167,74 @@ def classify_attack(username: str | None, password: str | None, commands: list[s
     if recon_hits >= 3:
         return "reconnaissance"
 
-    if username and username.lower() == "root" and cleaned_password in COMMON_BAD_PASSWORDS:
+    if username and username.lower() == "root" and cleaned_password and cleaned_password.lower() in COMMON_BAD_PASSWORDS:
         return "brute force probable"
 
     if len(commands) >= 5:
         return "activité suspecte"
 
     return "interaction simple"
+
+
+def compute_web_score(
+    path: str,
+    username: str | None,
+    password: str | None,
+    payload: str | None,
+    user_agent: str | None
+) -> int:
+    score = 0
+    cleaned_password = sanitize_password(password)
+    full_text = f"{path} {username or ''} {cleaned_password or ''} {payload or ''} {user_agent or ''}".lower()
+
+    if path.lower() in SENSITIVE_PATHS:
+        score += 15
+
+    if username and username.lower() == "admin":
+        score += 10
+
+    if cleaned_password and cleaned_password.lower() in COMMON_BAD_PASSWORDS:
+        score += 20
+
+    if cleaned_password == "(vide)":
+        score += 5
+
+    for keyword in WEB_SUSPICIOUS_KEYWORDS:
+        if keyword in full_text:
+            score += 20
+
+    if user_agent:
+        ua = user_agent.lower()
+        if "curl" in ua or "python" in ua or "sqlmap" in ua or "nikto" in ua:
+            score += 20
+
+    return min(score, 100)
+
+
+def classify_web_attack(
+    path: str,
+    payload: str | None,
+    user_agent: str | None,
+    username: str | None,
+    password: str | None
+) -> str:
+    text = f"{path} {payload or ''} {user_agent or ''} {username or ''} {password or ''}".lower()
+
+    if "union select" in text or "' or 1=1" in text or "\" or 1=1" in text:
+        return "tentative SQL injection"
+
+    if "<script>" in text:
+        return "tentative XSS"
+
+    if "../" in text or "/etc/passwd" in text:
+        return "tentative path traversal"
+
+    if "sqlmap" in text or "nikto" in text:
+        return "scan automatisé"
+
+    if path in ["/admin", "/login", "/wp-admin", "/phpmyadmin"]:
+        if username or password:
+            return "brute force web probable"
+        return "reconnaissance web"
+
+    return "interaction web simple"

@@ -33,3 +33,20 @@ class CommandLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     session = relationship("SessionAttack", back_populates="commands")
+
+
+class WebEvent(Base):
+    __tablename__ = "web_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ip_source = Column(String, index=True, nullable=False)
+    method = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    user_agent = Column(String, nullable=True)
+    username = Column(String, nullable=True)
+    password = Column(String, nullable=True)
+    payload = Column(String, nullable=True)
+    threat_score = Column(Integer, default=0, nullable=False)
+    threat_label = Column(String, nullable=True)
+    attack_type = Column(String, nullable=True)
